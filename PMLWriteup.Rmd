@@ -1,0 +1,105 @@
+---
+title: "PML Writeup"
+author: "David Konvalina"
+date: "25. ledna 2015"
+output: html_document
+---
+Welcome to the Machine Learning Excercise I created during the Coursera project.
+
+###Data
+The source data came from http://groupware.les.inf.puc-rio.br/har site and contains various measurements when couple
+of people were lifting weights and were doing these excersices either properly (classe=A) or with common mistakes (classe=B ..)
+
+###Data preparation & Analysis
+Before processing the data, data from the file pml-training.csv were stripped of the line number and name of the lifter, as 
+ther are not relevant for the predictions.
+Classe (resulting factor variable) was converted to a factor.
+```{r}
+library(caret)
+trainall<-read.csv("pml-training.csv",stringsAsFactors=FALSE)
+#row number (X) and user_name are irrelevant for training
+trainall<-trainall[,-(1:5)]
+#classe to be a factor
+trainall$classe<-factor(trainall$classe)
+
+#do the same operations for predicting data set
+test<-read.csv("pml-testing.csv",stringsAsFactors=FALSE)
+#row number (X) and user_name are irrelevant for training
+test<-test[,-(1:5)]
+#there is no classe column in the "testing" data set (predicting), so no factorization needed
+```
+
+This "training" dataset was split into real train and test datasets, with p=3/4.
+```{r}
+#split the training data to train and test sets
+set.seed(230570)
+inTrain = createDataPartition(trainall$classe, p = 3/4, list=FALSE)
+training = trainall[inTrain,]
+testing = trainall[-inTrain,]
+
+#check if we have some NAs in Y
+stopifnot(complete.cases(training$classe))
+```
+
+
+All columns containing NAs were removed, so resulting number of columns in the training set was 91 (incl. classe).
+```{r}
+#select only the columns, where are no NAs and non-character cols
+oktrain<-training[,!sapply(training,function(x) any(is.na(x)))]
+oktrain<-oktrain[,!sapply(oktrain,is.character)]
+okcols<-colnames(oktrain)
+
+#use the same columns for testing data set, for validation
+oktest<-testing[,okcols]
+
+#use the same columns for the predicting data set (pml-testing.csv)
+okPredictcols<-okcols[-grep("classe",okcols)]
+okPredict<-test[,okPredictcols]
+
+#check if there are not some undefined cases
+stopifnot(complete.cases(oktrain))
+stopifnot(complete.cases(oktest))
+stopifnot(complete.cases(okPredict))
+```
+
+Using train function, the prediction model was calculated, using defaults - Random Forest option, with default boosting for cross-validation, to select best prediction model.
+```{r}
+#train the model of random forest with all defaults
+set.seed(232323)
+#mod<-train(classe ~ ., data=oktest)
+mod<-train(classe ~ ., data=oktrain)
+```
+
+Accuracy of the predictor on Training data is:
+```{r}
+#find the Accuracy of the predictor on Train data
+predTrain<-predict(mod,oktrain)
+confusionMatrix(predTrain,oktrain$classe)
+```
+
+Accurace of the predictor on Testing data is:
+```{r}
+#predict Testing data to get accuracy on test data set
+predTest<-predict(mod,oktest)
+confusionMatrix(predTest,oktest$classe)
+```
+
+Finally, predic the data on 20 wanted cases:
+```{r}
+#finally predict the data wanted 20 cases (I call it predicting data set)
+predPredict<-predict(mod,okPredict)
+```
+
+predPredict is a vector for submission
+
+###Data cleaning:
+All columns containing NAs were removed, as well as other character vectors, containing lot of time Div/0 or nothing. Resulting number of columns in the training set was 54 (incl. classe).
+
+Using train function, the prediction model was calculated, using defaults - Random Forest option, with default bootstrapping (25 reps) for cross-validation, to select best prediction model.
+Accuracy of the predictor model is 0.996, Kappa 0.995
+
+Accuracy of the predictor on Training data is: 1.0
+Accurace of the predictor on Testing data is: 0.9969
+
+Resulting vector was used to generate 20 files for submission and all were correct.
+(as expected with the Accuracy of 0.9969 on testing data set)
